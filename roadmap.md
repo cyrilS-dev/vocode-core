@@ -27,7 +27,6 @@ Our roadmap; if an issue has been created or the feature is currently being work
   - [x] Bark
   - [x] [Play.ht](http://Play.ht)
   - [x] Eleven Labs
-  - [x] Cartesia
   - [ ] Amazon Polly
   - [ ] Resemble.AI
 
