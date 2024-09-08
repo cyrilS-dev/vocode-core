@@ -1,6 +1,5 @@
 import os
-from contextvars import ContextVar, Token
-from typing import Any
+from typing import Any, Dict
 from uuid import UUID
 
 import sentry_sdk
@@ -13,75 +12,50 @@ logger.disable("vocode")
 
 ensure_punkt_installed()
 
+sentry_sdk.init(
+    dsn=os.getenv("SENTRY_DSN")
+)
 
-class ContextWrapper:
-    """Context Variable Wrapper."""
-
-    _instances: list = []
-
-    def __init__(self, value: ContextVar) -> None:
-        self.__value: ContextVar = value
-        self.__token: Token
-        ContextWrapper._instances.append(self)
-
-    def set(self, value: Any) -> Token:
-        """Set a context variable."""
-        self.__token = self.__value.set(value)
+def set_context(key: str, value: Any) -> None:
+    """Set a context variable using Sentry's scope."""
+    with sentry_sdk.configure_scope() as scope:
+        scope.set_context(key, value)
         if isinstance(value, str):
-            sentry_sdk.set_tag(self.__value.name, value)
-        if isinstance(value, UUID):
-            sentry_sdk.set_tag(self.__value.name, str(value))
+            scope.set_tag(key, value)
+        elif isinstance(value, UUID):
+            scope.set_tag(key, str(value))
 
-        return self.__token
+def get_context(key: str, default: Any = None) -> Any:
+    """Get a context variable from Sentry's scope."""
+    with sentry_sdk.configure_scope() as scope:
+        contexts = scope._contexts
+        return contexts.get(key, default)
 
-    def reset(self, token: Token | None = None) -> None:
-        """Reset a context variable."""
-        if not hasattr(self, "__token"):
-            return
+def reset_context(key: str) -> None:
+    """Reset a context variable in Sentry's scope."""
+    with sentry_sdk.configure_scope() as scope:
+        scope.set_context(key, None)
 
-        if not token:
-            token = self.__token
-        self.__value.reset(token)
-        return
-
-    def __module__(self) -> Any:  # type: ignore
-        return self.__value.get()
-
-    @property
-    def value(self) -> Any:
-        """Gets the value of a context variable."""
-        return self.__value.get()
-
-    @classmethod
-    def serialize_instances(cls) -> dict:
-        """Gathers all instances of ContextWrapper."""
-        instances = {}
-        for instance in cls._instances:
-            value = instance.__value.get()
-            if isinstance(value, UUID):
-                value = str(value)
-
-            if isinstance(value, str):
-                instances[instance.__value.name] = value
-        return instances
-
+def serialize_context() -> Dict[str, Any]:
+    hub = sentry_sdk.Hub.current
+    if hub.client is None:
+        return {}
+    with hub:
+        scope = hub.scope
+        contexts = scope._contexts
+        return {k: v for k, v in contexts.items() if isinstance(v, (str, UUID))}
 
 def setenv(**kwargs):
     for key, value in kwargs.items():
         environment[key] = value
 
-
 def getenv(key, default=None):
     return environment.get(key) or os.getenv(key, default)
-
 
 api_key = getenv("VOCODE_API_KEY")
 base_url = getenv("VOCODE_BASE_URL", "api.vocode.dev")
 
-
-conversation_id: ContextWrapper = ContextWrapper(
-    ContextVar("conversation_id", default=None),
-)
-sentry_span_tags: ContextWrapper = ContextWrapper(ContextVar("sentry_span_tags", default=None))
-sentry_transaction = ContextWrapper(ContextVar("sentry_transaction", default=None))
-get_serialized_ctx_wrappers = ContextWrapper.serialize_instances
+set_context("conversation_id", None)
+set_context("sentry_span_tags", None)
+set_context("sentry_transaction", None)
+get_serialized_ctx_wrappers = serialize_context

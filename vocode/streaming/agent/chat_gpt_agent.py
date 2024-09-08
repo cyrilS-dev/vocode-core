@@ -7,7 +7,7 @@ from loguru import logger
 from openai import DEFAULT_MAX_RETRIES as OPENAI_DEFAULT_MAX_RETRIES
 from openai import AsyncAzureOpenAI, AsyncOpenAI, NotFoundError, RateLimitError
 
-from vocode import sentry_span_tags
+from vocode import get_context, set_context
 from vocode.streaming.action.abstract_factory import AbstractActionFactory
 from vocode.streaming.action.default_factory import DefaultActionFactory
 from vocode.streaming.agent.base_agent import GeneratedResponse, RespondAgent, StreamedResponse
@@ -244,10 +244,10 @@ class ChatGPTAgent(RespondAgent[ChatGPTAgentConfigType]):
             )
             backchannelled = "true"
 
-        span_tags = sentry_span_tags.value
+        span_tags = get_context("sentry_span_tags", {})
         if span_tags:
             span_tags["prior_backchannel"] = backchannelled
-            sentry_span_tags.set(span_tags)
+            set_context("sentry_span_tags", span_tags)
 
         first_sentence_total_span = sentry_create_span(
             sentry_callable=sentry_sdk.start_span, op=CustomSentrySpans.LLM_FIRST_SENTENCE_TOTAL

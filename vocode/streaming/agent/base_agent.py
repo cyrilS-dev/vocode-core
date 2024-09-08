@@ -11,7 +11,7 @@ import sentry_sdk
 from loguru import logger
 from pydantic.v1 import BaseModel
 
-from vocode import sentry_span_tags
+from vocode import get_context, set_context
 from vocode.streaming.action.abstract_factory import AbstractActionFactory
 from vocode.streaming.action.base_action import BaseAction
 from vocode.streaming.action.default_factory import DefaultActionFactory
@@ -282,10 +282,10 @@ class RespondAgent(BaseAgent[AgentConfigType]):
                             "Unknown message type received for Sentry metrics "
                             f"reporting: {type(generated_response.message)}",
                         )
-                span_tags = sentry_span_tags.value
+                span_tags = get_context("sentry_span_tags", {})
                 if span_tags:
                     span_tags["message_type"] = message_type
-                    sentry_span_tags.set(span_tags)
+                    set_context("sentry_span_tags", span_tags)
 
             if isinstance(generated_response.message, FunctionCall):
                 function_call = generated_response.message
